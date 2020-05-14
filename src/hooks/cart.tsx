@@ -18,10 +18,11 @@ interface Product {
 
 interface CartContext {
   products: Product[];
-  addToCart(item: Product): void;
+  addToCart(item: Omit<Product, 'quantity'>): void;
   increment(id: string): void;
   decrement(id: string): void;
 }
+const STORAGE_KEY = '@GoMarketplace:products';
 
 const CartContext = createContext<CartContext | null>(null);
 
@@ -30,65 +31,99 @@ const CartProvider: React.FC = ({ children }) => {
 
   useEffect(() => {
     async function loadProducts(): Promise<void> {
-      const asyncProducts = await AsyncStorage.getItem('@GoMarket:cart');
-      setProducts(JSON.parse(asyncProducts || '[]'));
+      // TODO LOAD ITEMS FROM ASYNC STORAGE
+      const response = await AsyncStorage.getItem(STORAGE_KEY);
+
+      if (response) {
+        const storageProducts = [...JSON.parse(response)].sort((a, b) => {
+          if (a.title > b.title) {
+            return 1;
+          }
+          return a.title < b.title ? -1 : 0;
+        });
+
+        setProducts(storageProducts);
+      }
     }
 
     loadProducts();
   }, []);
 
   const addToCart = useCallback(
-    async (item: Omit<Product, 'quantity'>) => {
-      const idx = products.findIndex(c => c.id === item.id);
+    async product => {
+      const productExists = products.find(prod => prod.id === product.id);
+      const quantity = productExists ? productExists.quantity + 1 : 1;
+      const newProductValue = { ...product, quantity };
 
-      const next =
-        idx < 0
-          ? [...products, { ...item, quantity: 1 }]
-          : [
-              ...products.slice(0, idx),
-              { ...products[idx], quantity: products[idx].quantity + 1 },
-              ...products.slice(idx + 1, products.length),
-            ];
-      await AsyncStorage.setItem('@GoMarket:cart', JSON.stringify(next));
-      return setProducts(next);
+      if (productExists) {
+        setProducts(
+          products
+            .map(p => (p.id === product.id ? newProductValue : p))
+            .sort((a, b) => {
+              if (a.title > b.title) {
+                return 1;
+              }
+              return a.title < b.title ? -1 : 0;
+            }),
+        );
+      } else {
+        setProducts(
+          [...products, newProductValue].sort((a, b) => {
+            if (a.title > b.title) {
+              return 1;
+            }
+            return a.title < b.title ? -1 : 0;
+          }),
+        );
+      }
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(products));
     },
     [products],
   );
 
   const increment = useCallback(
     async id => {
-      const idx = products.findIndex(c => c.id === id);
-      if (idx < 0) return products;
-      const next = [
-        ...products.slice(0, idx),
-        { ...products[idx], quantity: products[idx].quantity + 1 },
-        ...products.slice(idx + 1, products.length),
-      ];
-      await AsyncStorage.setItem('@GoMarket:cart', JSON.stringify(next));
+      // TODO INCREMENTS A PRODUCT QUANTITY IN THE CART
+      setProducts(
+        products
+          .map(product =>
+            product.id === id
+              ? { ...product, quantity: product.quantity + 1 }
+              : product,
+          )
+          .sort((a, b) => {
+            if (a.title > b.title) {
+              return 1;
+            }
+            return a.title < b.title ? -1 : 0;
+          }),
+      );
 
-      return setProducts(next);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(products));
     },
     [products],
   );
 
   const decrement = useCallback(
     async id => {
-      const idx = products.findIndex(c => c.id === id);
-      if (idx < 0) return products;
-      const next =
-        products[idx].quantity > 1
-          ? [
-              ...products.slice(0, idx),
-              { ...products[idx], quantity: products[idx].quantity - 1 },
-              ...products.slice(idx + 1, products.length),
-            ]
-          : [
-              ...products.slice(0, idx),
-              ...products.slice(idx + 1, products.length),
-            ];
-      await AsyncStorage.setItem('@GoMarket:cart', JSON.stringify(next));
+      // TODO DECREMENTS A PRODUCT QUANTITY IN THE CART
+      setProducts(
+        products
+          .map(product =>
+            product.id === id
+              ? { ...product, quantity: product.quantity - 1 }
+              : product,
+          )
+          .filter(product => product.quantity > 0)
+          .sort((a, b) => {
+            if (a.title > b.title) {
+              return 1;
+            }
+            return a.title < b.title ? -1 : 0;
+          }),
+      );
 
-      return setProducts(next);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(products));
     },
     [products],
   );
